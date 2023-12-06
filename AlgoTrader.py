@@ -3,6 +3,7 @@ import threading as th
 import numpy as np
 import datetime
 
+# Эту функцию стратегии вызываем мы
 def request_buy_or_sell(instrument, volume, price, buy=True, callback=None):
     request_number = 132
     print("instrument:",instrument)
@@ -12,7 +13,7 @@ def request_buy_or_sell(instrument, volume, price, buy=True, callback=None):
         callback(instrument, volume, price)
     return request_number
 
-
+# Эту функцию у стратегии вызываем только в асинхронном режиме
 def delete_request(buy_request_id):
     print("buy_request_id:",buy_request_id)
 
@@ -106,6 +107,7 @@ class Algotrader:
         return cur_price * (1 + self.comission)
     
     
+    # Эту функцию вызывает стратегия
     def timer_tic(self, time, prices_list):
         self.current_time = time
         self.update_prices(prices_list)
