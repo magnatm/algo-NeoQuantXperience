@@ -1,13 +1,14 @@
 from enum import Enum
 import threading as th  
 import numpy as np
+import datetime
 
-def request_buy_or_sell(instrument, volume, price, callback,  buy=True, need_callback = False):
+def request_buy_or_sell(instrument, volume, price, buy=True, callback=None):
     request_number = 132
     print("instrument:",instrument)
     print("volume:",volume)
     print("price:",price)
-    if need_callback:
+    if callback:
         callback(instrument, volume, price)
     return request_number
 
