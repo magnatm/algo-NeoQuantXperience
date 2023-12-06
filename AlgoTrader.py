@@ -1,9 +1,23 @@
 from enum import Enum
 import threading as th  
+import numpy as np
+
+def request_buy_or_sell(instrument, volume, price, callback,  buy=True, need_callback = False):
+    request_number = 132
+    print("instrument:",instrument)
+    print("volume:",volume)
+    print("price:",price)
+    if need_callback:
+        callback(instrument, volume, price)
+    return request_number
+
+
+def delete_request(buy_request_id):
+    print("buy_request_id:",buy_request_id)
 
 
 class Algotrader:
-    def __init__(self, cash, cur_prices, tickers, comission=0, timeout=10):
+    def __init__(self, cash, cur_prices, tickers, model, comission=0, timeout=10):
         self.cash = cash
         self.total_money = cash
         self.volumes = np.zeros(len(cur_prices))
@@ -21,6 +35,11 @@ class Algotrader:
         # Режим быстрой торговли даёт более выгодные цены, чтобы сделки быстрее закрывались
         self.fast_mode = False
         self.fast_coef = 0.5
+        self.model = model
+        self.opening_time = datetime.timedelta(hours=10)
+        self.closing_time = datetime.timedelta(hours=18, minutes=45)
+        self.opening_delta = datetime.timedelta(minutes=30)
+        self.closing_delta = datetime.timedelta(minutes=15)
         
     
     def update_prices(self, cur_prices):
@@ -43,7 +62,7 @@ class Algotrader:
                 self.requests_prices[i] = price
                 can_buy = self.cash // price
                 self.volumes_to_buy[i] = min(can_buy, (0.5 * self.total_money) / (predictions[i][0] - price))
-                self.expected_income.append((i, volumes_to_buy[i] * (predictions[i][0] - price)))
+                self.expected_income.append((i, self.volumes_to_buy[i] * (predictions[i][0] - price)))
         self.expected_income = sorted(self.expected_income, key= lambda x: x[1], reverse=True)
         instrument = self.expected_income[0][0]
         self.buy_try_number = 0
@@ -68,6 +87,7 @@ class Algotrader:
         self.requests_prices = {}
         self.volumes_to_buy = {}
         self.expected_income = []
+        # self.strategy_actions.pop(-1)
         self.buy_request_ids = {}
         self.buy_try_number = -1
     
@@ -83,3 +103,24 @@ class Algotrader:
         if self.fast_mode:
             return ((cur_price * (1 + self.comission) * (1 - self.fast_coef)) + (prediction * self.fast_coef)) 
         return cur_price * (1 + self.comission)
+    
+    
+    def timer_tic(self, time, prices_list):
+        self.current_time = time
+        self.update_prices(prices_list)
+        t = self.get_timedelta_today(time)
+        if t - self.opening_time < self.opening_delta:
+            pass
+        elif self.closing_time - t < self.closing_delta: 
+            pass
+        else:
+            prediction = self.model.predict(prices_list)
+            self.update_strategy(prediction)
+            
+            
+    def get_timedelta_today(self, date_time):
+        midnight = date_time.copy()
+        midnight.hours = 0
+        midnight.minutes = 0
+        midnight.seconds = 0
+        return date_time - midnight
