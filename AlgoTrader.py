@@ -69,7 +69,7 @@ class Algotrader:
         self.buy_try_number = 0
         # self.strategy_actions.append(self.stategy_types.BUY, self.timeout)
         th.Timer(self.timeout, self.buy_timeout)
-        buy_request_id = request_to_buy(self.tickers[instrument], self.volumes_to_buy[instrument], self.requests_prices[instrument], self.bought)
+        buy_request_id = request_buy_or_sell(self.tickers[instrument], self.volumes_to_buy[instrument], self.requests_prices[instrument], self.bought)
         self.buy_request_ids[instrument] = buy_request_id
         
         
@@ -81,7 +81,7 @@ class Algotrader:
             return
         instrument = self.expected_income[self.buy_try_number][0]
         delete_buy_request(self.buy_request_ids[self.expected_income[self.buy_try_number-1][0]])
-        buy_request_id = request_to_buy(self.tickers[instrument], self.volumes_to_buy[instrument], self.requests_prices[instrument], self.bought)
+        buy_request_id = request_buy_or_sell(self.tickers[instrument], self.volumes_to_buy[instrument], self.requests_prices[instrument], self.bought)
         self.buy_request_ids[instrument] = buy_request_id
         
     def clear_buy_request_cashe(self):
