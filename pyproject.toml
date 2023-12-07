@@ -16,6 +16,7 @@ gigachat = "^0.1.8"
 telethon = "^1.33.0"
 python-dotenv = "^1.0.0"
 emoji = "^2.9.0"
+pyarrow = "^14.0.1"
 
 
 [build-system]
