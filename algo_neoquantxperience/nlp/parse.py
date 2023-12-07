@@ -6,7 +6,8 @@ from typing import Optional
 from telethon import TelegramClient
 from telethon.tl.patched import Message
 
-from algo_neoquantxperience.nlp.settings import TG_API_HASH, TG_API_ID, TOP45
+from algo_neoquantxperience.common_constants import TOP45
+from algo_neoquantxperience.nlp.settings import TG_API_HASH, TG_API_ID
 from algo_neoquantxperience.nlp.structs import News, TickerNewsMap
 from algo_neoquantxperience.nlp.utils import remove_emoji, remove_past
 
