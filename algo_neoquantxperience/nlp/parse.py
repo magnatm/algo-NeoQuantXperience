@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 import pickle
 from typing import Optional
@@ -17,21 +18,31 @@ async def _aparse_telegram_messages(
     tg_group_id: int = -1001292964247,
 ) -> TickerNewsMap:
     """-1001292964247 is Full-Time Trading TG group."""
-    message: Message
-    messages: TickerNewsMap = {}
-    for search_text in search_list:
-        messages[search_text] = []
+    ticker_news_map: TickerNewsMap = {}
+
+    async def _aset_news(search_text: str) -> None:
+        message: Message
+        ticker_news_map[search_text] = []
         async for message in client.iter_messages(
             tg_group_id,
             search=search_text,
             reverse=True,
         ):
-            messages[search_text].append(
+            ticker_news_map[search_text].append(
                 News(datetime=message.date, text=message.message)
             )
-        print(f"Num messages with '{search_text}': {len(messages[search_text])}.\n")
+        print(
+            f"Num ticker_news_map with '{search_text}': {len(ticker_news_map[search_text])}.\n"
+        )
 
-    return messages
+    tasks = []
+    for search_text in search_list:
+        tasks.append(asyncio.create_task(_aset_news(search_text)))
+
+    for task in tasks:
+        await task
+
+    return ticker_news_map
 
 
 def parse_telegram_messages(
