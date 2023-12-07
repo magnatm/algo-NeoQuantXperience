@@ -5,7 +5,7 @@ from algo_neoquantxperience.nlp.chain import score_chain
 from algo_neoquantxperience.nlp.structs import News, TickerNewsMap
 
 
-def get_ticker_news_map_with_scores(
+def get_scores_from_llm(
     ticker_news_map: TickerNewsMap,
 ) -> TickerNewsMap:
     """Set scores that the LLM returned.
@@ -42,7 +42,7 @@ def get_ticker_news_map_with_scores(
     return ticker_news_map_with_scores
 
 
-def get_score_from_source(
+def get_scores_from_source(
     target_ticker_news_map: TickerNewsMap,
     source_ticker_news_map: TickerNewsMap,
 ) -> TickerNewsMap:
