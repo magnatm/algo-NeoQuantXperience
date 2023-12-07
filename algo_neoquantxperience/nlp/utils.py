@@ -1,6 +1,7 @@
 import datetime
 
 import emoji
+import pandas as pd
 
 from algo_neoquantxperience.nlp.structs import News, TickerNewsMap
 
@@ -28,3 +29,29 @@ def remove_emoji(ticker_news_map: TickerNewsMap) -> TickerNewsMap:
             for news in newses
         ]
     return output_filter_emoji
+
+
+def get_df_from_ticker_news_map(
+    ticker_news_map: TickerNewsMap,
+) -> pd.DataFrame:
+    dfs = []
+    for ticker, newses in ticker_news_map.items():
+        dates, scores, texts = [], [], []
+        for news in newses:
+            dates.append(news.datetime)
+            scores.append(news.score)
+            texts.append(news.text)
+        dfs.append(
+            pd.DataFrame(
+                {
+                    "ticker": ticker,
+                    "date": dates,
+                    "score": scores,
+                    "text": texts,
+                }
+            )
+        )
+    df = pd.concat(dfs)
+    df = df.astype({"score": float})
+    df = df.sort_values(by=["ticker", "date"]).reset_index(drop=True)
+    return df
