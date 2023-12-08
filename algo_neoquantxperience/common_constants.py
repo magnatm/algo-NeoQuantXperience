@@ -15,4 +15,24 @@ TOP45_DICT = {'AFKS': 0, 'AFLT': 1, 'AGRO': 2, 'ALRS': 3, 'CBOM': 4, 'CHMF': 5,
               'SNGSP': 36, 'TATN': 37, 'TATNP': 38, 'TCSG': 39, 'TRNFP': 40, 'UPRO': 41,
               'VKCO': 42, 'VTBR': 43, 'YNDX': 44}
 
-TICKER_TO_BRANCH_INDEX = {}
+TICKER_TO_BRANCH_INDEX = {
+    "AFKS": "MOEXBMI", "AFLT": "MOEXTN", "AGRO": "MOEXCN", "ALRS": "MOEXMM", "CBOM": "MOEXFN",
+    "CHMF": "MOEXMM", "ENPG": "MOEXMM", "FEES": "MOEXEU", "FIVE": "MOEXCN", "GAZP": "MOEXOG",
+    "GLTR": "MOEXTN", "GMKN": "MOEXMM", "HYDR": "MOEXEU", "IRAO": "MOEXEU", "LKOH": "MOEXOG",
+    "MAGN": "MOEXMM", "MGNT": "MOEXCN", "MOEX": "MOEXFN", "MTSS": "MOEXTL", "NLMK": "MOEXMM",
+    "NVTK": "MOEXOG", "OZON": "IMOEX", "PHOR": "MOEXCH", "PIKK": "IMOEX", "PLZL": "MOEXMM",
+    "POLY": "MOEXMM", "POSI": "IMOEX", "QIWI": "MOEXFN", "ROSN": "MOEXOG", "RTKM": "MOEXTL",
+    "RUAL": "MOEXMM", "SBER": "MOEXFN", "SBERP": "MOEXFN", "SELG": "MOEXMM", "SGZH": "MOEXBMI",
+    "SNGS": "MOEXOG", "SNGSP": "MOEXOG", "TATN": "MOEXOG", "TATNP": "MOEXOG", "TCSG": "MOEXFN",
+    "TRNFP": "MOEXOG", "UPRO": "MOEXEU", "VKCO": "IMOEX", "VTBR": "MOEXFN", "YNDX": "IMOEX"}
+
+ALGOPACK_AVAILABLE_INDEXES = {'MOEXBMI': 'Индекс широкого рынка',
+                              'MOEXCH': 'Индекс химии и нефтехимии',
+                              'MOEXCN': 'Индекс потребительского сектора',
+                              'MOEXEU': 'Индекс электроэнергетики',
+                              'MOEXFN': 'Индекс финансов',
+                              'MOEXMM': 'Индекс металлов и добычи',
+                              'MOEXOG': 'Индекс нефти и газа',
+                              'MOEXTL': 'Индекс телекоммуникаций',
+                              'MOEXTN': 'Индекс транспорта',
+                              'IMOEX': 'Индекс МосБиржи'}
