@@ -23,6 +23,8 @@ backtrader = "^1.9.78.123"
 matplotlib = "^3.8.2"
 streamlit = "^1.29.0"
 plotly = "^5.18.0"
+pydantic-settings = "^2.1.0"
+tinkoff-investments = "^0.2.0b62"
 
 
 [build-system]
