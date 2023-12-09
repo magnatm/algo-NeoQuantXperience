@@ -5,10 +5,11 @@ import datetime
 import torch
 from .make_future_timesteps import make_future_timesteps, MakeFutureKnownDataArgs, MakeFutureDateArgs
 import pandas as pd
+from algo_neoquantxperience.common_constants import LOTS_SIZES, CALENDAR_DATA
 
 
 class DDDF_predictor:
-    def __init__(self, model_path='experiments/data_with_news/models_logs/model_artifacts/TemporalFusionTransformer/TemporalFusionTransformer.pt',  path_to_calendar = "../3df-notebooks/data/common/calendar.parquet"):
+    def __init__(self, model_path='TemporalFusionTransformer.pt'):
         self.model = torch.load(model_path)
         self.ids_in_train = ['AFKS', 'AFLT', 'AGRO', 'ALRS', 'CBOM', 'CHMF', 'ENPG', 'FEES',
        'FIVE', 'GAZP', 'GLTR', 'GMKN', 'HYDR', 'IRAO', 'LKOH', 'MAGN',
@@ -16,7 +17,6 @@ class DDDF_predictor:
        'PLZL', 'POLY', 'POSI', 'QIWI', 'ROSN', 'RTKM', 'RUAL', 'SBER',
        'SBERP', 'SELG', 'SGZH', 'SNGS', 'SNGSP', 'TATN', 'TATNP', 'TCSG',
        'TRNFP', 'UPRO', 'VKCO', 'VTBR', 'YNDX']
-        self.path_to_calendar = path_to_calendar
         self.last_x = 0
         
     def fades(self,x):
@@ -55,7 +55,7 @@ class DDDF_predictor:
         df_orig = _add_time_idxs(history_data)
         
         
-        minute_calendar_df = pd.read_parquet(self.path_to_calendar)
+        minute_calendar_df = CALENDAR_DATA
         minute_calendar_df = minute_calendar_df.rename(columns={'date':"begin"})
 
         df = df_orig.merge(minute_calendar_df, how="left", on='begin')
@@ -97,7 +97,7 @@ class DDDF_predictor:
     
 
 class Dispatcher:
-    def __init__(self, config, tickers, cash, path_to_lot_sizes='45tickers_metainfo.csv', asynchroneous_mode=False, default_prices = None):
+    def __init__(self, config, tickers, cash, asynchroneous_mode=False, default_prices = None):
         self.config = config
         self.asynchroneous_mode = asynchroneous_mode
         self.tickers_len = len(tickers)
@@ -111,7 +111,7 @@ class Dispatcher:
         self.algotrader = Algotrader(cash, cur_prices, range(self.tickers_len), self, comission=1e-5, timeout=10)
         # self.predictor = DDDF_predictor(config_path, tickers, ids_in_train, path_to_calendar)
         self.predictor = DDDF_predictor()
-        self.lot_sizes = pd.read_csv(path_to_lot_sizes).sort_values('ticker')['LOTSIZE']
+        self.lot_sizes = LOTS_SIZES.sort_values('ticker')['LOTSIZE']
         self.start_dataset = None
         
     

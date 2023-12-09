@@ -1,3 +1,4 @@
+import pandas as pd
 
 TOP45 = ['AFKS', 'AFLT', 'AGRO', 'ALRS', 'CBOM', 'CHMF', 'ENPG', 'FEES',
        'FIVE', 'GAZP', 'GLTR', 'GMKN', 'HYDR', 'IRAO', 'LKOH', 'MAGN',
@@ -36,3 +37,9 @@ ALGOPACK_AVAILABLE_INDEXES = {'MOEXBMI': 'Индекс широкого рынк
                               'MOEXTL': 'Индекс телекоммуникаций',
                               'MOEXTN': 'Индекс транспорта',
                               'IMOEX': 'Индекс МосБиржи'}
+
+LOTS_SIZES = pd.read_csv('datasets_for_algotrader/45tickers_metainfo.csv')
+
+CALENDAR_DATA = pd.read_parquet('datasets_for_algotrader/calendar.parquet')
+
+NEWS_DATA = pd.read_parquet('datasets_for_algotrader/sentiment_scores.parquet')
