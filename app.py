@@ -1,5 +1,6 @@
 import datetime
 import pickle
+from typing import cast
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -12,14 +13,15 @@ from algo_neoquantxperience.moexalgopack.utils import get_candles
 from algo_neoquantxperience.nlp.score import (get_scores_from_llm,
                                               get_scores_from_source)
 from algo_neoquantxperience.nlp.utils import (get_df_from_ticker_news_map,
+                                              get_df_sentiment_with_diffs,
                                               remove_past)
 
 st.set_page_config(layout="wide")
 l1, l2, l3 = st.columns((0.3, 0.3, 0.3))
 date_start = l1.text_input("Start date", value="2023-06-01")
 date_end = l2.text_input("End date", value="2024-01-01")
-period = l3.text_input("Period", value="1h")
-ticker = st.selectbox("Choose ticker", TOP45)
+period = cast(str, l3.selectbox("Period", options=["10m", "1h", "D", "W"], index=2))
+ticker = cast(str, st.selectbox("Choose ticker", options=TOP45))
 
 with open("data/nlp/ticker_news_map_with_scores.pkl", "rb") as handle:
     ticker_news_map_base = pickle.load(handle)
@@ -34,66 +36,37 @@ ticker_news_map = remove_past(
         *[int(t) for t in date_start.split("-")], tzinfo=datetime.timezone.utc
     ),
 )
-df_scores = get_df_from_ticker_news_map(ticker_news_map)
-df_candles_stocks = get_candles(
-    ticker,
-    date_start=date_start,  # "2023-05-24",
-    date_end=date_end,  # "2023-12-04",
-    period=period,  # "1h",
-)
+df_scores = get_df_from_ticker_news_map(ticker_news_map, rerank=False)
 
 
 m1, m2 = st.columns((1, 1))
-m1.text("Акция")
-fig = make_subplots(specs=[[{"secondary_y": True}]])
-fig.add_trace(
-    go.Candlestick(
-        x=df_candles_stocks.begin,
-        open=df_candles_stocks.open,
-        close=df_candles_stocks.close,
-        high=df_candles_stocks.high,
-        low=df_candles_stocks.low,
-        name="stock_price",
-    ),
-    secondary_y=False,
+indexes = [k + "__" + v for k, v in ALGOPACK_AVAILABLE_INDEXES.items()]
+index = cast(str, m1.selectbox("Choose index", options=indexes)).split("__")[0]
+# m2.text(ALGOPACK_AVAILABLE_INDEXES[index])
+df_candles_stocks = get_candles(
+    ticker,
+    date_start=date_start,
+    date_end=date_end,
+    period=period,
 )
-fig.add_trace(
-    go.Candlestick(
-        x=df_scores.date,
-        open=[0] * len(df_scores.score),
-        close=df_scores.score,
-        high=df_scores.score,
-        low=df_scores.score,
-        hovertext=df_scores.text,
-        name="news_score",
-        increasing_line_color="cyan",
-        decreasing_line_color="gray",
-    ),
-    secondary_y=True,
-)
-fig.update_layout(width=10000)
-m1.plotly_chart(fig, use_container_width=True)
-
-m21, m22 = m2.columns((1,1))
-index = m21.selectbox("Choose index", list(ALGOPACK_AVAILABLE_INDEXES.keys()))
-m22.text(ALGOPACK_AVAILABLE_INDEXES[index])
 df_candles_index = get_candles(
     index,
     date_start=date_start,
     date_end=date_end,
     period=period,
 )
-fig = make_subplots(specs=[[{"secondary_y": True}]])
+
+# m1.title("Цена акции")
+fig = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.02)
 fig.add_trace(
-    go.Candlestick(
-        x=df_candles_index.begin,
-        open=df_candles_index.open,
-        close=df_candles_index.close,
-        high=df_candles_index.high,
-        low=df_candles_index.low,
-        name="index",
-    ),
-    secondary_y=False,
+    go.Scatter(x=df_candles_index.begin, y=df_candles_index.close, name="Индекс close"),
+    row=1,
+    col=1,
+)
+fig.add_trace(
+    go.Scatter(x=df_candles_stocks.begin, y=df_candles_stocks.close, name="Цена акции close"),
+    row=2,
+    col=1,
 )
 fig.add_trace(
     go.Candlestick(
@@ -103,11 +76,47 @@ fig.add_trace(
         high=df_scores.score,
         low=df_scores.score,
         hovertext=df_scores.text,
-        increasing_line_color="cyan",
-        decreasing_line_color="gray",
-        name="news_score",
+        name="Сентимент новости",
     ),
-    secondary_y=True,
+    row=3,
+    col=1,
 )
-fig.update_layout(width=10000)
+idx1, idx2, idx3 = st.columns((0.2, 0.4, 0.2))
+fig.update_layout(height=1000)
+idx2.plotly_chart(fig, use_container_width=True, height=1000)
+st.title("Зависимость изменения цены акции от сентимента новости")
+m1, minter, m2 = st.columns((0.2, 0.1, 0.5))
+m21, m22 = m2.columns((1, 1))
+days_before = m21.selectbox(
+    "Период до новости", options=[1, 2, 3, 4, 5, 6, 7]
+)
+days_after = m22.selectbox(
+    "Период после новости", options=[1, 2, 3, 4, 5, 6, 7, 28], index=2
+)
+df_sentiment_with_diffs = get_df_sentiment_with_diffs(
+    df_candles=df_candles_stocks,
+    df_sentiment=df_scores,
+    days_before=days_before,
+    days_after=days_after,
+)
+column_to_analyze = "pct_change"
+minter.dataframe(
+    df_sentiment_with_diffs.groupby("score")[column_to_analyze].mean().reset_index(),
+    hide_index=True,
+)
+fig = go.Figure()
+fig.add_trace(
+    go.Box(
+        x=df_sentiment_with_diffs.score,
+        y=df_sentiment_with_diffs[column_to_analyze],
+    ),
+)
+fig.update_layout(xaxis_title="Sentiment score", yaxis_title="Percantage change")
 m2.plotly_chart(fig, use_container_width=True)
+
+with st.expander("Новости"):
+    for row in df_scores.iloc[::-1].iterrows():
+        s1, s2, s3 = st.columns((0.1, 0.1, 0.8))
+        s1.text(row[1]["date"])
+        s2.metric("Score by Gigachat", value=row[1]["score"])
+        s3.text(row[1]["text"].replace("\n\n", "\n"))
