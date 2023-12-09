@@ -21,7 +21,7 @@ def _add_time_idxs(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-class DDDF_predictor:
+class Predicton:
     def __init__(self, model_path='TemporalFusionTransformer.pt'):
         self.model = torch.load(model_path)
         self.ids_in_train = ['AFKS', 'AFLT', 'AGRO', 'ALRS', 'CBOM', 'CHMF', 'ENPG', 'FEES',
@@ -122,8 +122,8 @@ class Dispatcher:
         else:
             cur_prices = self.default_prices
         self.algotrader = Algotrader(cash, cur_prices, range(self.tickers_len), self, comission=1e-5, timeout=10)
-        # self.predictor = DDDF_predictor(config_path, tickers, ids_in_train, path_to_calendar)
-        self.predictor = DDDF_predictor()
+        # self.predictor = Predicton(config_path, tickers, ids_in_train, path_to_calendar)
+        self.predictor = Predicton()
         self.lot_sizes = LOTS_SIZES.sort_values('ticker')['LOTSIZE']
         self.start_dataset = None
         
