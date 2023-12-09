@@ -9,7 +9,6 @@ from plotly.subplots import make_subplots
 from algo_neoquantxperience.common_constants import (
     ALGOPACK_AVAILABLE_INDEXES, TOP45)
 from algo_neoquantxperience.moexalgopack.utils import get_candles
-from algo_neoquantxperience.nlp.parse import parse_telegram_messages
 from algo_neoquantxperience.nlp.score import (get_scores_from_llm,
                                               get_scores_from_source)
 from algo_neoquantxperience.nlp.utils import (get_df_from_ticker_news_map,
