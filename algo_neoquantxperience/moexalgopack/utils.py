@@ -17,8 +17,8 @@ def get_candles(ticker: str, date_start: str, date_end: str, period: str='10m', 
     :param limit:
     :return:
     """
-    with Ticker(ticker) as t:
-        res = pd.DataFrame(t.candles(date=date_start, till_date=date_end, period=period, limit=limit))
+    t = Ticker(ticker)
+    res = pd.DataFrame(t.candles(date=date_start, till_date=date_end, period=period, limit=limit))
     return res
 
 
