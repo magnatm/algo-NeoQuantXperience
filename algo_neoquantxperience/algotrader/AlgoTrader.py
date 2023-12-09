@@ -7,6 +7,19 @@ from .make_future_timesteps import make_future_timesteps, MakeFutureKnownDataArg
 import pandas as pd
 from algo_neoquantxperience.common_constants import LOTS_SIZES, CALENDAR_DATA
 
+def _add_time_idxs(df: pd.DataFrame) -> pd.DataFrame:
+    counts = df.groupby(["id"])["id"].count()
+    max_count = counts.max()
+
+    time_idx_eq_end_column = []
+    for count in counts.values:
+        time_idx_eq_end_column += np.arange(max_count - count, max_count).tolist()
+
+    df["time_idx_eq_end"] = time_idx_eq_end_column
+    df["time_idx_eq_end"] = df["time_idx_eq_end"].astype(int)
+
+    return df
+
 
 class DDDF_predictor:
     def __init__(self, model_path='TemporalFusionTransformer.pt'):
@@ -89,7 +102,7 @@ class DDDF_predictor:
         ).ffill()
         preds, indexes = self.model.predict(df_anomaly_filtered_forecast.ffill(), mode="quantiles", return_index=True)
         time_idx_pred = indexes['time_idx_eq_end'].unique()[0]
-        date_to_predict = df_anomaly_filtered_forecast.loc[df_anomaly_filtered_forecast['time_idx_eq_end']==time_idx_pred][fit_predict_config.preprocess_config.date_column_name].unique()[0]
+        date_to_predict = df_anomaly_filtered_forecast.loc[df_anomaly_filtered_forecast['time_idx_eq_end']==time_idx_pred]['begin'].unique()[0]
         return preds[:,0][:,0:5:4], date_to_predict
     
 
@@ -247,16 +260,15 @@ class Algotrader:
             #         m
             
             
-        
     def buy_timeout(self):
         self.buy_try_number += 1
         if self.buy_try_number >= len(self.expected_income):
-            self.dispatcher.delete_buy_request(self.buy_request_ids[self.expected_income[self.buy_try_number-1][0]])
+            self.dispatcher.delete_request(self.buy_request_ids[self.expected_income[self.buy_try_number-1][0]])
             self.clear_buy_request_cashe()
             return
         instrument = self.expected_income[self.buy_try_number][0]
-        delete_buy_request(self.buy_request_ids[self.expected_income[self.buy_try_number-1][0]])
-        buy_request_id = dispatcher.request_buy_or_sell(instrument, self.volumes_to_buy[instrument], self.requests_prices[instrument], buy=True, callback=self.bought)
+        self.dispatcher.delete_request(self.buy_request_ids[self.expected_income[self.buy_try_number-1][0]])
+        buy_request_id = self.dispatcher.request_buy_or_sell(instrument, self.volumes_to_buy[instrument], self.requests_prices[instrument], buy=True, callback=self.bought)
         self.buy_request_ids[instrument] = buy_request_id
         
         
