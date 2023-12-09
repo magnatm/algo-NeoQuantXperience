@@ -54,4 +54,5 @@ def get_df_from_ticker_news_map(
     df = pd.concat(dfs)
     df = df.astype({"score": float})
     df = df.sort_values(by=["ticker", "date"]).reset_index(drop=True)
+    df.date = df.date.dt.tz_convert('Europe/Moscow').dt.tz_localize(None)
     return df
