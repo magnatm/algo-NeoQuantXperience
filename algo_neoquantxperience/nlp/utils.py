@@ -1,8 +1,12 @@
 import datetime
+import pickle
+from os import path
 
 import emoji
 import pandas as pd
 
+from algo_neoquantxperience.nlp.score import (get_scores_from_llm,
+                                              get_scores_from_source)
 from algo_neoquantxperience.nlp.structs import News, TickerNewsMap
 
 
@@ -54,5 +58,18 @@ def get_df_from_ticker_news_map(
     df = pd.concat(dfs)
     df = df.astype({"score": float})
     df = df.sort_values(by=["ticker", "date"]).reset_index(drop=True)
-    df.date = df.date.dt.tz_convert('Europe/Moscow').dt.tz_localize(None)
+    df.date = df.date.dt.tz_convert("Europe/Moscow").dt.tz_localize(None)
+    return df
+
+
+def get_df_llm_scores(
+    path_to_news_with_scores: str, path_to_actual_news: str
+) -> pd.DataFrame:
+    with open(path_to_news_with_scores, "rb") as handle:
+        ticker_news_map_base = pickle.load(handle)
+    with open(path_to_actual_news, "rb") as handle:
+        ticker_news_map = pickle.load(handle)
+    ticker_news_map = get_scores_from_source(ticker_news_map, ticker_news_map_base)
+    ticker_news_map = get_scores_from_llm(ticker_news_map)
+    df = get_df_from_ticker_news_map(ticker_news_map)
     return df
