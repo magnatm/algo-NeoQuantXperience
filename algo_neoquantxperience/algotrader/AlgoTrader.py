@@ -125,12 +125,12 @@ class Dispatcher:
         self.lot_sizes = LOTS_SIZES.sort_values('ticker')['LOTSIZE']
         self.start_dataset = None
         self.backtest_results = None
-        
-    
+        self.ticker_reversed_dict = {value: ind for ind, value in self.algotrader.tickers_numbers.items()}
+        self.trading_delta = datetime.timedelta(minutes=10)
     
     def request_buy_or_sell(self, instrument, volume, price, buy=True, callback=None):
         request_number = round(torch.rand(1).item() * 1000)
-        print("instrument:", self.algotrader.tickers_numbers.keys()[self.algotrader.tickers_numbers.values().index(instrument)])
+        print("instrument:", self.ticker_reversed_dict[instrument])
         print("volume:",volume)
         print("price:",price)
         if callback:
@@ -172,7 +172,10 @@ class Dispatcher:
         timepoints_df_45_by_10min = sorted(list(df_45_by_10min['begin'].unique()))[50:]  # чтобы была история данных для предиктора
         for timepoint in timepoints_df_45_by_10min:
             data_till_timepoint = df_45_by_10min[df_45_by_10min.begin <= timepoint].sort_values('ticker')
-            data_till_timepoint_ut = sorted(data_till_timepoint.ticker.unique())
+            count_ids = data_till_timepoint.groupby('ticker').count()
+            data_till_timepoint_ut = count_ids.loc[count_ids["open"]>=51].index
+            
+#             data_till_timepoint_ut = sorted(data_till_timepoint.ticker.unique())
             news_till_timepoint = news_data[news_data.date <= timepoint]
             self.predictor.update_news_data(news_data=news_till_timepoint)
             predictions, date_to_predict = self.predictor.predict(data_till_timepoint)
@@ -180,8 +183,11 @@ class Dispatcher:
             predictions = predictions * torch.Tensor(LOTS_SIZES.sort_values('ticker')[LOTS_SIZES['ticker'].isin(data_till_timepoint_ut)]['LOTSIZE']).unsqueeze(1).repeat(1, 2)
             filtered_data_cur_timepoint = data_cur_timepoint[['ticker', 'open']][~data_cur_timepoint['ticker'].isin(bad_predictions)]
             cur_ticker_open_prices = list(filtered_data_cur_timepoint.itertuples(index=False))
-            self.algotrader.timer_tic(time=datetime.datetime.utcfromtimestamp(timepoint.tolist()/1e9), cur_ticker_open_prices=cur_ticker_open_prices, prediction=predictions)
+            tickers = data_cur_timepoint['ticker'][~data_cur_timepoint['ticker'].isin(bad_predictions)]
+            ticker_indexes = [self.algotrader.tickers_numbers[i] for i in tickers]
+            self.algotrader.timer_tic(time=datetime.datetime.utcfromtimestamp(timepoint.tolist()/1e9), cur_ticker_open_prices=cur_ticker_open_prices, prediction=predictions, ticker_indexes= ticker_indexes)
             self.backtest_results.loc[len(self.backtest_results.index)] = [timepoint, self.algotrader.total_money, self.algotrader.cash]
+            self.algotrader.update_total_money()
         return self.backtest_results
 
     def timer_tic(self, new_data, prices):
@@ -209,6 +215,7 @@ class Algotrader:
         self.strategy_actions = []
         #self.strategy_types = Enum('Action', ['BUY','SELL','HOLD']) 
         self.buy_request_ids = {}
+        self.sell_request_ids = {}
         self.sell_requests_list = []
         self.tickers_numbers = TOP45_DICT
         # Режим быстрой торговли даёт более выгодные цены, чтобы сделки быстрее закрывались
@@ -220,53 +227,58 @@ class Algotrader:
         self.opening_delta = datetime.timedelta(minutes=30)
         self.closing_delta = datetime.timedelta(minutes=15)
         self.min_relative_income = []
-        
+        self.max_relative_income = []
     
     def update_prices(self, cur_ticker_open_prices):
         for t, p in cur_ticker_open_prices:
             n = self.tickers_numbers[t]
             self.lot_prices[n] = p * self.dispatcher.lot_sizes[n]
-        
+
 
     def update_total_money(self, cur_ticker_open_prices=None):
         if cur_ticker_open_prices:
             self.update_prices(cur_ticker_open_prices)
         self.total_money = self.cash + (sum(self.volumes * self.lot_prices))
         
-    def update_strategy(self, predictions, cur_ticker_open_prices):
+    def update_strategy(self, predictions, cur_ticker_open_prices, ticker_indexes):
         self.requests_prices = {}
         self.volumes_to_buy = {}
         self.expected_income = []
         self.min_relative_income = []
+        self.max_relative_income = []
         # for i in range(len(predictions)):
+        convert_dict = {i: ind for ind, i in enumerate(ticker_indexes)}
         for t, p in cur_ticker_open_prices:
             i = self.tickers_numbers[t]
+            i1 = convert_dict[i]
             # состовляем предложения о продаже. Для начала продаём только те акции, которые выгодно продавать сами по себе
             # в дальнейшем добавим продажу акций, чтобы получить деньги для покупки других, более выгодных
             # затем уже добавим фьючерсные сделки
             if self.volumes[i] > 0: # пока у нас нет фьючерсных сделок 
-                if predictions[i][1] < self.lot_prices[i] * (1 - self.comission):
-                    price = self.calc_sell_price(self.lot_prices[i], predictions[i][1])
-                    volume_to_sell = min(self.volumes[i], (0.5 * self.total_money) // (price - predictions[i][1]))
+                if predictions[i1][1] < self.lot_prices[i] * (1 - self.comission):
+                    price = self.calc_sell_price(self.lot_prices[i], predictions[i1][1])
+                    volume_to_sell = min(self.volumes[i], (0.5 * self.total_money) // (price - predictions[i1][1]))
                     request_id = self.dispatcher.request_buy_or_sell(i, volume_to_sell, price, buy=False, callback=self.sold)
-                    self.sell_requests_list.append(request_id)
-                # else:
-                #     self.max_relative_income.append((i,(predictions[i][1] - self.lot_prices[i] / self.lot_prices[i])))
+                    self.sell_request_ids[request_id]
+                else:
+                    self.max_relative_income.append((i,(predictions[i1][1] - self.lot_prices[i] / self.lot_prices[i])))
             # состовляем предложения о покупке
-            if predictions[i][0] > self.lot_prices[i] * (1 + self.comission):
-                price = self.calc_buy_price(self.lot_prices[i], predictions[i][0])
+            if predictions[i1][0] > self.lot_prices[i] * (1 + self.comission):
+                price = self.calc_buy_price(self.lot_prices[i], predictions[i1][0])
                 can_buy = self.cash // price
-                volume_to_buy = min(can_buy, (0.5 * self.total_money) // (predictions[i][0] - price))
+                volume_to_buy = min(can_buy, (0.5 * self.total_money) // (predictions[i1][0] - price))
                 if volume_to_buy > 0:
                     self.requests_prices[i] = price
                     self.volumes_to_buy[i] = volume_to_buy
-                    self.expected_income.append((i, self.volumes_to_buy[i] * (predictions[i][0] - price)))
-                    self.min_relative_income.append((i,(predictions[i][0] - self.lot_prices[i] * (1 + self.comission)) / self.lot_prices[i]))
+                    self.expected_income.append((i, self.volumes_to_buy[i] * (predictions[i1][0] - price)))
+                    self.min_relative_income.append((i,(predictions[i1][0] - self.lot_prices[i] * (1 + self.comission)) / self.lot_prices[i]))
             
     
         if len(self.expected_income) > 0:
             self.expected_income = sorted(self.expected_income, key= lambda x: x[1], reverse=True)
             self.min_relative_income = sorted(self.min_relative_income, key= lambda x: x[1], reverse=True)
+            # Отсортирован по возростанию в отличии от остальных
+            self.max_relative_income = sorted(self.max_relative_income, key= lambda x: x[1], reverse=False)
             instrument = self.expected_income[0][0]
             self.buy_try_number = 0
             
@@ -274,10 +286,20 @@ class Algotrader:
                 th.Timer(self.timeout, self.buy_timeout)
             buy_request_id = self.dispatcher.request_buy_or_sell(instrument, self.volumes_to_buy[instrument], self.requests_prices[instrument], buy=True, callback=self.bought)
             self.buy_request_ids[instrument] = buy_request_id
-            # for i in range(len(self.tickers)):
-            #     if self.volumes[i] > 0:
-            #         m
+            for i, rel_income in self.max_relative_income:
+                if self.volumes[i] > 0:
+                    if rel_income  < self.min_relative_income[0][1] * (1 - 2 * self.comission):
+                        sell_request_id = self.dispatcher.request_buy_or_sell(i, self.volumes_to_buy[i], self.requests_prices[i], buy=False, callback=self.sold)
+                        self.sell_request_ids[i] = sell_request_id
+                        if self.dispatcher.asynchroneous_mode:
+                            th.Timer(self.timeout, lambda : self.sell_timeout(i))
             
+            
+            
+            
+    def sell_timeout(self, instrument):
+        self.dispatcher.delete_request(self.sell_request_ids[instrument])
+    
             
     def buy_timeout(self):
         self.buy_try_number += 1
@@ -319,7 +341,7 @@ class Algotrader:
         return cur_price * (1 + self.comission)
     
     
-    def timer_tic(self, time, cur_ticker_open_prices, prediction):
+    def timer_tic(self, time, cur_ticker_open_prices, prediction, ticker_indexes):
         self.current_time = time
         
         t = self.dispatcher.get_timedelta_today(time)
@@ -330,11 +352,53 @@ class Algotrader:
         self.update_prices(cur_ticker_open_prices)
         
         if t - self.opening_time < self.opening_delta:
-            print('Специальный режим сразу после открытия биржи')
+            if t - self.opening_delta < self.dispatcher.trading_delta:
+                news_df = self.dispatcher.predictor.news_data
+                plus_array = news_df.loc[(news_df['score']==3) & (news_df['date'] > (t-datetime.timedelta(hours=24)+self.closing_delta))][['ticker']].values()
+                minus_array = news_df.loc[(news_df['score']==-3) & (news_df['date'] > (t-datetime.timedelta(hours=24)+self.closing_delta))][['ticker']].values()
+                for t in minus_array:
+                    i = self.tickers_numbers[t]
+                    if self.volumes[i] > 0:
+                        sell_request_id = self.dispatcher.request_buy_or_sell(i, self.volumes[i], self.requests_prices[i], buy=False, callback=self.sold)
+                        self.sell_request_ids[i] = sell_request_id
+                        if self.dispatcher.asynchroneous_mode:
+                            th.Timer(self.timeout, lambda : self.sell_timeout(i))
+                tickers_for_pred_dict = {t: ind for ind, t in enumerate(ticker_indexes)}
+                
+                self.clear_buy_request_cashe()
+                
+                for t in plus_array:
+                    i = self.tickers_numbers[t]
+                    i1 = tickers_for_pred_dict[t]
+                    if predictions[i1][0] > self.lot_prices[i] * (1 + self.comission):
+                        price = self.calc_buy_price(self.lot_prices[i], predictions[i1][0])
+                        can_buy = self.cash // price
+                        volume_to_buy = min(can_buy, (0.5 * self.total_money) // (predictions[i1][0] - price))
+                        if volume_to_buy > 0:
+                            self.requests_prices[i] = price
+                            self.volumes_to_buy[i] = volume_to_buy
+                            self.expected_income.append((i, self.volumes_to_buy[i] * (predictions[i1][0] - price)))
+                            self.min_relative_income.append((i,(predictions[i1][0] - self.lot_prices[i] * (1 + self.comission)) / self.lot_prices[i]))
+                            
+                if len(self.expected_income) > 0:
+                    self.expected_income = sorted(self.expected_income, key= lambda x: x[1], reverse=True)
+                    self.min_relative_income = sorted(self.min_relative_income, key= lambda x: x[1], reverse=True)
+                    # Отсортирован по возростанию в отличии от остальных
+                    self.max_relative_income = sorted(self.max_relative_income, key= lambda x: x[1], reverse=False)
+                    instrument = self.expected_income[0][0]
+                    self.buy_try_number = 0
+            
+                    if self.dispatcher.asynchroneous_mode:
+                        th.Timer(self.timeout, self.buy_timeout)
+                    buy_request_id = self.dispatcher.request_buy_or_sell(instrument, self.volumes_to_buy[instrument], self.requests_prices[instrument], buy=True, callback=self.bought)
+                    self.buy_request_ids[instrument] = buy_request_id
+
+                        
         elif self.closing_time - t < self.closing_delta: 
+            self.clear_buy_request_cashe()
             print('Специальный режим перед закрытием биржи')
         else:
-            self.update_strategy(prediction, cur_ticker_open_prices)
+            self.update_strategy(prediction, cur_ticker_open_prices, ticker_indexes)
             print('total money', self.total_money)
             
     
