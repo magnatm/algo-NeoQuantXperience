@@ -25,28 +25,30 @@ class TradeBot:
         self.__running = True
         self.loop_thread = threading.Thread(target=self.main_loop, kwargs={'cash':cash})
         self.loop_thread.start()
+        self.loop_thread.run()
 
     def main_loop(self, cash):
         candles = get_today_candles(ticker_list=IMOEX_FILTERED)
         start_prices = np.array(candles[candles['begin'] == candles['begin'].max()]['close'])
-        self.dispatcher = Dispatcher(cash=cash, asynchroneous_mode=True, default_prices=start_prices)
-        last_time = datetime.datetime.now()
+        self.dispatcher = Dispatcher(cash=cash, tradebot=self,asynchroneous_mode=True, default_prices=start_prices)
+        last_time = datetime.datetime.now() - datetime.timedelta(minutes=10)
+        print(f'last_time {last_time}')
         while self.__running:
             # if datetime.datetime.now().minute // 10 == 0 and datetime.datetime.now().second < 5:
             if (datetime.datetime.now() - last_time) >= datetime.timedelta(minutes=10):
                 last_time = datetime.datetime.now()
                 self.trading_results = pd.DataFrame(columns=['datetime', 'total_money', 'cash'])
 
-                with open('../../data/nlp/ticker_news_map_with_scores.pkl', 'rb') as handle:
-                    ticker_news_map_base = pickle.load(handle)
-                ticker_news_map = parse_telegram_messages(
-                    start_date=datetime.datetime(2023, 6, 1, tzinfo=datetime.timezone.utc)
-                )
-                ticker_news_map = get_scores_from_source(ticker_news_map, ticker_news_map_base)
-                ticker_news_map = get_scores_from_llm(ticker_news_map)
-                cur_news = get_df_from_ticker_news_map(ticker_news_map)
+                # with open('../../data/nlp/ticker_news_map_with_scores.pkl', 'rb') as handle:
+                #     ticker_news_map_base = pickle.load(handle)
+                # ticker_news_map = parse_telegram_messages(
+                #     start_date=datetime.datetime(2023, 6, 1, tzinfo=datetime.timezone.utc)
+                # )
+                # ticker_news_map = get_scores_from_source(ticker_news_map, ticker_news_map_base)
+                # ticker_news_map = get_scores_from_llm(ticker_news_map)
+                # cur_news = get_df_from_ticker_news_map(ticker_news_map)
 
-                # cur_news = get_df_llm_scores('../../data/nlp/ticker_news_map_with_scores.pkl', '../../news.pkl')
+                cur_news = get_df_llm_scores('../../data/nlp/ticker_news_map_with_scores.pkl', '../../news.pkl')
                 cur_candles_data = get_today_candles(IMOEX_FILTERED)
                 timepoint = cur_candles_data.begin.max()
                 cur_candles_data = cur_candles_data.sort_values('ticker')
@@ -61,14 +63,13 @@ class TradeBot:
                 cur_ticker_open_prices = list(data_cur_timepoint[['ticker', 'open']].itertuples(index=False))
                 tickers = data_cur_timepoint['ticker']
                 ticker_indexes = [self.dispatcher.algotrader.tickers_numbers[i] for i in tickers]
-                self.dispatcher.algotrader.timer_tic(time=datetime.datetime.utcfromtimestamp(timepoint.tolist() / 1e9),
+                self.dispatcher.algotrader.timer_tic(time=timepoint, #datetime.datetime.utcfromtimestamp(timepoint.tolist() / 1e9)
                                           cur_ticker_open_prices=cur_ticker_open_prices, predictions=predictions, ticker_indexes=ticker_indexes)
                 self.trading_results.loc[len(self.trading_results.index)] = [timepoint, self.dispatcher.algotrader.total_money, self.dispatcher.algotrader.cash]
+                print(timepoint, self.dispatcher.algotrader.total_money, self.dispatcher.algotrader.cash)
                 self.dispatcher.algotrader.update_total_money()
 
     def stop(self):
         self.__running = False
         self.trading_results.to_csv(f'{datetime.datetime.now().strftime("%Y-%m-%d %H-%M-%S")}_trading_results.csv', index=False)
         print('Session ended!')
-
-
