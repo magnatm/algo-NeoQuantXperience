@@ -42,7 +42,6 @@ class Predicton:
         
     def update_news_data(self,news_data):
         news_data['date'] = news_data['date'].dt.ceil('10min',nonexistent='shift_backward')  
-        news_data.loc[~news_data['score'].isin(np.arange(7)-3)]
         news_data = news_data.set_index('date').groupby('ticker').resample("10min", origin="end").agg("mean", numeric_only=True).reset_index()
         news_data = news_data.rename(columns={'date':'begin'})
         # news_data['begin'] = pd.to_datetime(news_data.begin).dt.tz_localize(None) + datetime.timedelta(hours=3)
@@ -119,7 +118,7 @@ class Dispatcher:
         #     cur_prices = torch.zeros(self.tickers_len)
         # else:
         #     cur_prices = self.default_prices
-        self.algotrader = Algotrader(cash, default_prices, self, comission=1e-5, timeout=10)
+        self.algotrader = Algotrader(cash, default_prices, self, comission=1e-4, timeout=10)
         # self.predictor = Predicton(config_path, tickers, ids_in_train, path_to_calendar)
         self.predictor = Predicton()
         self.lot_sizes = LOTS_SIZES.sort_values('ticker')['LOTSIZE']
@@ -130,9 +129,12 @@ class Dispatcher:
     
     def request_buy_or_sell(self, instrument, volume, price, buy=True, callback=None):
         request_number = round(torch.rand(1).item() * 1000)
+        print('buy' if buy else 'sell')
         print("instrument:", self.ticker_reversed_dict[instrument])
         print("volume:",volume)
         print("price:",price)
+        print("cash:",self.algotrader.cash)
+        
         if callback:
             callback(instrument, volume, price)
         return request_number
@@ -179,8 +181,14 @@ class Dispatcher:
             news_till_timepoint = news_data[news_data.date <= timepoint]
             self.predictor.update_news_data(news_data=news_till_timepoint)
             predictions, date_to_predict = self.predictor.predict(data_till_timepoint)
+            print(date_to_predict)
             data_cur_timepoint = data_till_timepoint[data_till_timepoint.begin == timepoint].sort_values('ticker')
             predictions = predictions * torch.Tensor(LOTS_SIZES.sort_values('ticker')[LOTS_SIZES['ticker'].isin(data_till_timepoint_ut)]['LOTSIZE']).unsqueeze(1).repeat(1, 2)
+            
+            data  = pd.DataFrame(np.array(predictions), columns=['0.25','0.75'])
+            data['top45'] = LOTS_SIZES['ticker']
+            predictions = torch.Tensor(np.array(data[~data['top45'].isin(bad_predictions)][['0.25','0.75']]))
+            
             filtered_data_cur_timepoint = data_cur_timepoint[['ticker', 'open']][~data_cur_timepoint['ticker'].isin(bad_predictions)]
             cur_ticker_open_prices = list(filtered_data_cur_timepoint.itertuples(index=False))
             tickers = data_cur_timepoint['ticker'][~data_cur_timepoint['ticker'].isin(bad_predictions)]
@@ -259,7 +267,7 @@ class Algotrader:
                     price = self.calc_sell_price(self.lot_prices[i], predictions[i1][1])
                     volume_to_sell = min(self.volumes[i], (0.5 * self.total_money) // (price - predictions[i1][1]))
                     request_id = self.dispatcher.request_buy_or_sell(i, volume_to_sell, price, buy=False, callback=self.sold)
-                    self.sell_request_ids[request_id]
+                    self.sell_request_ids[i] = request_id
                 else:
                     self.max_relative_income.append((i,(predictions[i1][1] - self.lot_prices[i] / self.lot_prices[i])))
             # состовляем предложения о покупке
