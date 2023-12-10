@@ -3,8 +3,8 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    token: str = "os.getenv('TINKOFF_TOKEN')"
-    sandbox_token: str = "os.getenv('TINKOFF_SANDBOX_TOKEN')"
+    token: str = os.getenv('TINKOFF_TOKEN')
+    sandbox_token: str = os.getenv('TINKOFF_SANDBOX_TOKEN')
     ticker_figi: dict[str, str] = {'AFKS': 'BBG004S68614', 'AFLT': 'BBG004S683W7',
                                    'AGRO': 'BBG007N0Z367', 'ALRS': 'BBG004S68B31',
                                    'CBOM': 'BBG009GSYN76', 'CHMF': 'BBG00475K6C3',

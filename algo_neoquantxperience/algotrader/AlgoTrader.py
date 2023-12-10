@@ -25,7 +25,7 @@ def _add_time_idxs(df: pd.DataFrame) -> pd.DataFrame:
 
 
 class Predicton:
-    def __init__(self, model_path='algotrader/TemporalFusionTransformer.pt'):
+    def __init__(self, model_path='TemporalFusionTransformer.pt'):
         self.model = torch.load(model_path)
         self.ids_in_train = ['AFKS', 'AFLT', 'AGRO', 'ALRS', 'CBOM', 'CHMF', 'ENPG', 'FEES',
        'FIVE', 'GAZP', 'GLTR', 'GMKN', 'HYDR', 'IRAO', 'LKOH', 'MAGN',
