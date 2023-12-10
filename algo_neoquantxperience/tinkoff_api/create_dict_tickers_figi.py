@@ -14,7 +14,7 @@ list_tickers = ['AFKS', 'AFLT', 'AGRO', 'ALRS', 'CBOM', 'CHMF', 'ENPG', 'FEES',
        'TRNFP', 'UPRO', 'VKCO', 'VTBR', 'YNDX']
 dict_share_figi = dict()
 
-with Client(Settings().token) as cl:
+with Client(Settings().sandbox_token) as cl:
        instruments: InstrumentsService = cl.instruments
        r = instruments.shares(instrument_status=InstrumentStatus.INSTRUMENT_STATUS_ALL)
        all_shares = [share.__dict__ for share in r.instruments]
