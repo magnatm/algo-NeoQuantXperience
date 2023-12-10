@@ -39,6 +39,7 @@ ticker_news_map = remove_past(
 df_scores = get_df_from_ticker_news_map(
     ticker_news_map, rerank=False, remove_template=True
 )
+df_scores = df_scores.loc[df_scores["date"] <= date_end]
 
 
 m1, m2 = st.columns((1, 1))
@@ -110,7 +111,7 @@ m1, minter, m2 = st.columns((0.2, 0.1, 0.5))
 m21, m22 = m2.columns((1, 1))
 days_before = m21.selectbox("Период до новости", options=[1, 2, 3, 4, 5, 6, 7])
 days_after = m22.selectbox(
-    "Период после новости", options=[1, 2, 3, 4, 5, 6, 7, 28], index=2
+    "Период после новости", options=[1, 2, 3, 4, 5, 20], index=2
 )
 df_scores["news_level"] = df_scores["score"].rolling(5).sum()
 df_sentiment_with_diffs = get_df_sentiment_with_diffs(
@@ -124,10 +125,11 @@ corr = df_sentiment_with_diffs.corr(numeric_only=True).loc["news_level", "pct_ch
 minter.text(f"Corr (Pearson): {corr}")
 fig = go.Figure()
 fig.add_trace(
-    go.Box(
+    go.Scatter(
         x=df_sentiment_with_diffs.news_level,
         y=df_sentiment_with_diffs[column_to_analyze],
-        # mode="markers",
+        mode="markers",
+        marker={"size": 16},
     ),
 )
 fig.update_layout(xaxis_title="Новостной фон", yaxis_title="Percantage change")
