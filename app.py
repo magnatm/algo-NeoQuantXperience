@@ -17,6 +17,7 @@ from algo_neoquantxperience.nlp.utils import (get_df_from_ticker_news_map,
                                               remove_past)
 
 st.set_page_config(layout="wide")
+st.title("Анализ новостного фона")
 l1, l2, l3 = st.columns((0.3, 0.3, 0.3))
 date_start = l1.text_input("Start date", value="2023-06-01")
 date_end = l2.text_input("End date", value="2024-01-01")
@@ -62,13 +63,13 @@ df_candles_index = get_candles(
 # m1.title("Цена акции")
 fig = make_subplots(rows=4, cols=1, shared_xaxes=True, vertical_spacing=0.02)
 fig.add_trace(
-    go.Scatter(x=df_candles_index.begin, y=df_candles_index.close, name="Индекс close"),
+    go.Scatter(x=df_candles_index.begin, y=df_candles_index.close, name=f"Индекс {index} close"),
     row=1,
     col=1,
 )
 fig.add_trace(
     go.Scatter(
-        x=df_candles_stocks.begin, y=df_candles_stocks.close, name="Цена акции close"
+        x=df_candles_stocks.begin, y=df_candles_stocks.close, name=f"Цена акции {ticker} close"
     ),
     row=2,
     col=1,
@@ -105,13 +106,14 @@ fig.add_trace(
 )
 idx1, idx2, idx3 = st.columns((0.2, 0.4, 0.2))
 fig.update_layout(height=1000)
+fig.update_xaxes(rangeslider_visible=False)
 idx2.plotly_chart(fig, use_container_width=True, height=1000)
 st.title("Зависимость изменения цены акции от сентимента новости")
 m1, minter, m2 = st.columns((0.2, 0.1, 0.5))
 m21, m22 = m2.columns((1, 1))
 days_before = m21.selectbox("Период до новости", options=[1, 2, 3, 4, 5, 6, 7])
 days_after = m22.selectbox(
-    "Период после новости", options=[1, 2, 3, 4, 5, 20], index=2
+    "Период после новости", options=[1, 2, 3, 4, 5, 20], index=4
 )
 df_scores["news_level"] = df_scores["score"].rolling(5).sum()
 df_sentiment_with_diffs = get_df_sentiment_with_diffs(
@@ -129,7 +131,7 @@ fig.add_trace(
         x=df_sentiment_with_diffs.news_level,
         y=df_sentiment_with_diffs[column_to_analyze],
         mode="markers",
-        marker={"size": 16},
+        marker={"size": 12},
     ),
 )
 fig.update_layout(xaxis_title="Новостной фон", yaxis_title="Percantage change")
