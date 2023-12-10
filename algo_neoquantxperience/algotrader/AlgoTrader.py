@@ -5,7 +5,10 @@ import datetime
 import torch
 from algo_neoquantxperience.algotrader.make_future_timesteps import make_future_timesteps, MakeFutureKnownDataArgs, MakeFutureDateArgs
 import pandas as pd
-from algo_neoquantxperience.common_constants import LOTS_SIZES, CALENDAR_DATA, TOP45_DICT
+from algo_neoquantxperience.common_constants import TOP45_DICT
+
+LOTS_SIZES = pd.read_csv('../datasets_for_algotrader/45tickers_metainfo.csv')
+CALENDAR_DATA = pd.read_parquet('../datasets_for_algotrader/calendar.parquet')
 
 def _add_time_idxs(df: pd.DataFrame) -> pd.DataFrame:
     counts = df.groupby(["id"])["id"].count()
@@ -42,7 +45,6 @@ class Predicton:
         
     def update_news_data(self,news_data):
         news_data['date'] = news_data['date'].dt.ceil('10min',nonexistent='shift_backward')  
-        news_data.loc[~news_data['score'].isin(np.arange(7)-3)]
         news_data = news_data.set_index('date').groupby('ticker').resample("10min", origin="end").agg("mean", numeric_only=True).reset_index()
         news_data = news_data.rename(columns={'date':'begin'})
         # news_data['begin'] = pd.to_datetime(news_data.begin).dt.tz_localize(None) + datetime.timedelta(hours=3)
@@ -110,7 +112,7 @@ class Predicton:
     
 
 class Dispatcher:
-    def __init__(self, cash, asynchroneous_mode=False, default_prices = None):
+    def __init__(self, cash, tradebot, asynchroneous_mode=False, default_prices=None):
         self.asynchroneous_mode = asynchroneous_mode
         self.default_prices = default_prices
         # Тут должны создаваться стратегии и получаться начальные цены
@@ -120,6 +122,7 @@ class Dispatcher:
         # else:
         #     cur_prices = self.default_prices
         self.algotrader = Algotrader(cash, default_prices, self, comission=1e-5, timeout=10)
+        self.tradebot = tradebot
         # self.predictor = Predicton(config_path, tickers, ids_in_train, path_to_calendar)
         self.predictor = Predicton()
         self.lot_sizes = LOTS_SIZES.sort_values('ticker')['LOTSIZE']
@@ -129,16 +132,27 @@ class Dispatcher:
         self.trading_delta = datetime.timedelta(minutes=10)
     
     def request_buy_or_sell(self, instrument, volume, price, buy=True, callback=None):
-        request_number = round(torch.rand(1).item() * 1000)
+        #request_number = round(torch.rand(1).item() * 1000)
         print("instrument:", self.ticker_reversed_dict[instrument])
         print("volume:",volume)
         print("price:",price)
-        if callback:
-            callback(instrument, volume, price)
-        return request_number
+
+        if buy:
+            order_id = self.tradebot.tinkoff_trader.buy(ticker=self.ticker_reversed_dict[instrument], quantity=volume)
+            order_state = self.tradebot.tinkoff_trader.get_order_state(order_id=order_id)
+            if order_state==1:
+                if callback:
+                    callback(instrument, volume, price)
+        else:
+            order_id = self.tradebot.tinkoff_trader.sell(ticker=self.ticker_reversed_dict[instrument], quantity=volume)
+            order_state = self.tradebot.tinkoff_trader.get_order_state(order_id=order_id)
+            if order_state == 1:
+                if callback:
+                    callback(instrument, volume, price)
+        return order_id
     
     def delete_request(self,buy_request_id):
-        print("buy_request_id:",buy_request_id)
+        print("buy_request_id:", buy_request_id)
         
     def get_timedelta_today(self, date_time):
         return date_time - self.midnight(date_time)
@@ -168,7 +182,7 @@ class Dispatcher:
 
     def backtest_algotrader(self, df_45_by_10min: pd.DataFrame, news_data: pd.DataFrame) -> pd.DataFrame:
         self.backtest_results = pd.DataFrame(columns=['datetime', 'total_money', 'cash'])
-        bad_predictions = ['SBER', 'SBERP', 'SNGSP', 'SGZH', 'RTKM', 'QIWI', 'MOEX']
+        filter = ['SBER', 'SBERP', 'SNGSP', 'SGZH', 'RTKM', 'QIWI', 'MOEX']
         timepoints_df_45_by_10min = sorted(list(df_45_by_10min['begin'].unique()))[50:]  # чтобы была история данных для предиктора
         for timepoint in timepoints_df_45_by_10min:
             data_till_timepoint = df_45_by_10min[df_45_by_10min.begin <= timepoint].sort_values('ticker')
@@ -179,13 +193,19 @@ class Dispatcher:
             news_till_timepoint = news_data[news_data.date <= timepoint]
             self.predictor.update_news_data(news_data=news_till_timepoint)
             predictions, date_to_predict = self.predictor.predict(data_till_timepoint)
+            print(date_to_predict)
             data_cur_timepoint = data_till_timepoint[data_till_timepoint.begin == timepoint].sort_values('ticker')
             predictions = predictions * torch.Tensor(LOTS_SIZES.sort_values('ticker')[LOTS_SIZES['ticker'].isin(data_till_timepoint_ut)]['LOTSIZE']).unsqueeze(1).repeat(1, 2)
-            filtered_data_cur_timepoint = data_cur_timepoint[['ticker', 'open']][~data_cur_timepoint['ticker'].isin(bad_predictions)]
+            
+            data  = pd.DataFrame(np.array(predictions), columns=['0.25','0.75'])
+            data['top45'] = LOTS_SIZES['ticker']
+            predictions = torch.Tensor(np.array(data[~data['top45'].isin(filter)][['0.25','0.75']]))
+
+            filtered_data_cur_timepoint = data_cur_timepoint[['ticker', 'open']][~data_cur_timepoint['ticker'].isin(filter)]
             cur_ticker_open_prices = list(filtered_data_cur_timepoint.itertuples(index=False))
-            tickers = data_cur_timepoint['ticker'][~data_cur_timepoint['ticker'].isin(bad_predictions)]
+            tickers = data_cur_timepoint['ticker'][~data_cur_timepoint['ticker'].isin(filter)]
             ticker_indexes = [self.algotrader.tickers_numbers[i] for i in tickers]
-            self.algotrader.timer_tic(time=datetime.datetime.utcfromtimestamp(timepoint.tolist()/1e9), cur_ticker_open_prices=cur_ticker_open_prices, prediction=predictions, ticker_indexes= ticker_indexes)
+            self.algotrader.timer_tic(time=datetime.datetime.utcfromtimestamp(timepoint.tolist()/1e9), cur_ticker_open_prices=cur_ticker_open_prices, predictions=predictions, ticker_indexes= ticker_indexes)
             self.backtest_results.loc[len(self.backtest_results.index)] = [timepoint, self.algotrader.total_money, self.algotrader.cash]
             self.algotrader.update_total_money()
         return self.backtest_results
@@ -259,7 +279,7 @@ class Algotrader:
                     price = self.calc_sell_price(self.lot_prices[i], predictions[i1][1])
                     volume_to_sell = min(self.volumes[i], (0.5 * self.total_money) // (price - predictions[i1][1]))
                     request_id = self.dispatcher.request_buy_or_sell(i, volume_to_sell, price, buy=False, callback=self.sold)
-                    self.sell_request_ids[request_id]
+                    self.sell_request_ids[i] = request_id
                 else:
                     self.max_relative_income.append((i,(predictions[i1][1] - self.lot_prices[i] / self.lot_prices[i])))
             # состовляем предложения о покупке
@@ -341,7 +361,7 @@ class Algotrader:
         return cur_price * (1 + self.comission)
     
     
-    def timer_tic(self, time, cur_ticker_open_prices, prediction, ticker_indexes):
+    def timer_tic(self, time, cur_ticker_open_prices, predictions, ticker_indexes):
         self.current_time = time
         
         t = self.dispatcher.get_timedelta_today(time)
@@ -383,7 +403,7 @@ class Algotrader:
                 if len(self.expected_income) > 0:
                     self.expected_income = sorted(self.expected_income, key= lambda x: x[1], reverse=True)
                     self.min_relative_income = sorted(self.min_relative_income, key= lambda x: x[1], reverse=True)
-                    # Отсортирован по возростанию в отличии от остальных
+                    # Отсортирован по возрастанию в отличие от остальных
                     self.max_relative_income = sorted(self.max_relative_income, key= lambda x: x[1], reverse=False)
                     instrument = self.expected_income[0][0]
                     self.buy_try_number = 0
@@ -398,7 +418,7 @@ class Algotrader:
             self.clear_buy_request_cashe()
             print('Специальный режим перед закрытием биржи')
         else:
-            self.update_strategy(prediction, cur_ticker_open_prices, ticker_indexes)
+            self.update_strategy(predictions, cur_ticker_open_prices, ticker_indexes)
             print('total money', self.total_money)
             
     
