@@ -44,7 +44,7 @@ df_scores = df_scores.loc[df_scores["date"] <= date_end]
 
 m1, m2 = st.columns((1, 1))
 indexes = [k + "__" + v for k, v in ALGOPACK_AVAILABLE_INDEXES.items()]
-index = cast(str, m1.selectbox("Choose index", options=indexes)).split("__")[0]
+index = cast(str, m1.selectbox("Choose index", options=indexes, index=6)).split("__")[0]
 # m2.text(ALGOPACK_AVAILABLE_INDEXES[index])
 df_candles_stocks = get_candles(
     ticker,
