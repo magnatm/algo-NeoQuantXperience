@@ -36,7 +36,9 @@ ticker_news_map = remove_past(
         *[int(t) for t in date_start.split("-")], tzinfo=datetime.timezone.utc
     ),
 )
-df_scores = get_df_from_ticker_news_map(ticker_news_map, rerank=False)
+df_scores = get_df_from_ticker_news_map(
+    ticker_news_map, rerank=False, remove_template=True
+)
 
 
 m1, m2 = st.columns((1, 1))
@@ -57,15 +59,34 @@ df_candles_index = get_candles(
 )
 
 # m1.title("Цена акции")
-fig = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.02)
+fig = make_subplots(rows=4, cols=1, shared_xaxes=True, vertical_spacing=0.02)
 fig.add_trace(
     go.Scatter(x=df_candles_index.begin, y=df_candles_index.close, name="Индекс close"),
     row=1,
     col=1,
 )
 fig.add_trace(
-    go.Scatter(x=df_candles_stocks.begin, y=df_candles_stocks.close, name="Цена акции close"),
+    go.Scatter(
+        x=df_candles_stocks.begin, y=df_candles_stocks.close, name="Цена акции close"
+    ),
     row=2,
+    col=1,
+)
+df_rolling_mean = (
+    df_scores.set_index("date")["score"]
+    .resample("1d")
+    .mean()
+    .fillna(0)
+    .rolling(5)
+    .mean()
+)
+fig.add_trace(
+    go.Scatter(
+        x=df_rolling_mean.index,
+        y=df_rolling_mean,
+        name="Новостной фон",
+    ),
+    row=3,
     col=1,
 )
 fig.add_trace(
@@ -78,7 +99,7 @@ fig.add_trace(
         hovertext=df_scores.text,
         name="Сентимент новости",
     ),
-    row=3,
+    row=4,
     col=1,
 )
 idx1, idx2, idx3 = st.columns((0.2, 0.4, 0.2))
@@ -87,12 +108,11 @@ idx2.plotly_chart(fig, use_container_width=True, height=1000)
 st.title("Зависимость изменения цены акции от сентимента новости")
 m1, minter, m2 = st.columns((0.2, 0.1, 0.5))
 m21, m22 = m2.columns((1, 1))
-days_before = m21.selectbox(
-    "Период до новости", options=[1, 2, 3, 4, 5, 6, 7]
-)
+days_before = m21.selectbox("Период до новости", options=[1, 2, 3, 4, 5, 6, 7])
 days_after = m22.selectbox(
     "Период после новости", options=[1, 2, 3, 4, 5, 6, 7, 28], index=2
 )
+df_scores["news_level"] = df_scores["score"].rolling(5).sum()
 df_sentiment_with_diffs = get_df_sentiment_with_diffs(
     df_candles=df_candles_stocks,
     df_sentiment=df_scores,
@@ -100,18 +120,17 @@ df_sentiment_with_diffs = get_df_sentiment_with_diffs(
     days_after=days_after,
 )
 column_to_analyze = "pct_change"
-minter.dataframe(
-    df_sentiment_with_diffs.groupby("score")[column_to_analyze].mean().reset_index(),
-    hide_index=True,
-)
+corr = df_sentiment_with_diffs.corr(numeric_only=True).loc["news_level", "pct_change"]
+minter.text(f"Corr (Pearson): {corr}")
 fig = go.Figure()
 fig.add_trace(
     go.Box(
-        x=df_sentiment_with_diffs.score,
+        x=df_sentiment_with_diffs.news_level,
         y=df_sentiment_with_diffs[column_to_analyze],
+        # mode="markers",
     ),
 )
-fig.update_layout(xaxis_title="Sentiment score", yaxis_title="Percantage change")
+fig.update_layout(xaxis_title="Новостной фон", yaxis_title="Percantage change")
 m2.plotly_chart(fig, use_container_width=True)
 
 with st.expander("Новости"):

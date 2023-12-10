@@ -39,6 +39,7 @@ def remove_emoji(ticker_news_map: TickerNewsMap) -> TickerNewsMap:
 def get_df_from_ticker_news_map(
     ticker_news_map: TickerNewsMap,
     rerank: bool = False,
+    remove_template: bool = False,
 ) -> pd.DataFrame:
     dfs = []
     for ticker, newses in ticker_news_map.items():
@@ -72,6 +73,10 @@ def get_df_from_ticker_news_map(
 
     if rerank:
         df.loc[:, "score"] = df["score"].map(_rerank)
+
+    bad_template = "САМЫЕ ВАЖНЫЕ СОБЫТИЯ ЭТОЙ НЕДЕЛИ"
+    if remove_template:
+        df = df.loc[~df['text'].str.contains(bad_template)].reset_index(drop=True)
     return df
 
 
@@ -99,7 +104,7 @@ def get_df_sentiment_with_diffs(
     for row in df_sentiment.iterrows():
         news_date = pd.to_datetime(row[1].date.date())
         close_before = (
-            df_candles[df_candles.begin <= news_date]
+            df_candles[df_candles.begin < news_date]
             .tail(days_before)["close"]
             .values.mean()
         )
