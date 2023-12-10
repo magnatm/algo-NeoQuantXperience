@@ -21,7 +21,7 @@ l1, l2, l3 = st.columns((0.3, 0.3, 0.3))
 date_start = l1.text_input("Start date", value="2023-06-01")
 date_end = l2.text_input("End date", value="2024-01-01")
 period = cast(str, l3.selectbox("Period", options=["10m", "1h", "D", "W"], index=2))
-ticker = cast(str, st.selectbox("Choose ticker", options=TOP45))
+ticker = cast(str, st.selectbox("Choose ticker", options=TOP45, index=9))
 
 with open("data/nlp/ticker_news_map_with_scores.pkl", "rb") as handle:
     ticker_news_map_base = pickle.load(handle)
